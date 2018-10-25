@@ -1,78 +1,93 @@
-[![Travis build status](https://img.shields.io/travis/mike10004/har-replay.svg)](https://travis-ci.org/mike10004/har-replay)
+[![Travis build status](https://travis-ci.org/mike10004/har-replay.svg?branch=master)](https://travis-ci.org/mike10004/har-replay)
+[![AppVeyor build status](https://ci.appveyor.com/api/projects/status/tfhj96elsi8ytf82?svg=true)](https://ci.appveyor.com/project/mike10004/har-replay)
 [![Maven Central](https://img.shields.io/maven-central/v/com.github.mike10004/har-replay.svg)](https://repo1.maven.org/maven2/com/github/mike10004/har-replay/)
 
 har-replay
 ==========
 
-Java library for serving recorded HTTP responses from a HAR file. The library
-uses a Node module called [har-replay-proxy] that acts as an HTTP proxy. The
-proxy intercepts each request and responds with a pre-recorded response from 
-a HAR.
+Java library and executable for serving recorded HTTP responses from a HAR 
+file. To use it, you provide a HAR file, the library instantiates an HTTP
+proxy server, and you configure your web browser to use the proxy server. 
+The proxy intercepts each request and responds with the corresponding 
+pre-recorded response from the HAR.
 
 Quick Start
 -----------
+
+### Package
+
+Look in https://repo1.maven.org/maven2/com/github/mike10004/har-replay-dist 
+for the latest `.deb` file or build the parent project to produce one. Execute
+
+    $ sudo dpkg --install /path/to/har-replay-deb  
+
+to install the package. (Replace the filename with the downloaded file or the 
+build product.) 
+
+Execute
+
+    $ har-replay --port 56789 /path/to/my.har
+
+to start an HTTP proxy on port 56789 serving responses from `/path/to/my.har`.
+
+### Library
 
 Maven dependency:
 
     <dependency>
         <groupId>com.github.mike10004</groupId>
-        <artifactId>har-replay</artifactId>
-        <version>0.5</version>
+        <artifactId>har-replay-vhs</artifactId>
+        <version>0.26</version> <!-- use latest version -->
     </dependency>
 
-See Maven badge above for the actual latest version.
+See Maven badge above for the actual latest version. Example code:
 
-If you have a HAR file handy, you can replay it as shown here:
-
-    public static void example(File harFile) throws IOException {
-        ReplayManagerConfig replayManagerConfig = ReplayManagerConfig.auto();
-        ReplayManager replayManager = new ReplayManager(replayManagerConfig);
-        ReplaySessionConfig sessionConfig = ReplaySessionConfig.usingTempDir().build(harFile);
-        ExecutorService executorService = Executors.newSingleThreadExecutor();
+    File harFile = new File("my-session.har");
+    ReplaySessionConfig sessionConfig = ReplaySessionConfig.usingTempDir().build(harFile);
+    VhsReplayManagerConfig config = VhsReplayManagerConfig.getDefault();
+    ReplayManager replayManager = new VhsReplayManager(config);
+    try (ReplaySessionControl sessionControl = replayManager.start(sessionConfig)) {
+        URL url = new URL("http://www.example.com/");
+        Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress("localhost", sessionControl.getListeningPort()));
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection(proxy);
         try {
-            Future<?> server = replayManager.startAsync(executorService, sessionConfig);
-            doSomethingWithProxy("localhost", sessionConfig.port);
-            server.cancel(true);
+            System.out.format("served from HAR: %s %s %s%n", conn.getResponseCode(), conn.getResponseMessage(), url);
+            // do something with the connection...
         } finally {
-            executorService.shutdownNow();
+            conn.disconnect();
         }
     }
 
-The unit tests contain some examples of usage with an Apache HTTP client and a
-Chrome WebDriver client. 
+(Imports are from the library and the `java.net` package.)
 
-Interrogatives
---------------
+The unit tests contain some examples of using the library with an Apache HTTP 
+client and a Selenium Chrome WebDriver client. 
+
+FAQ
+---
 
 ### How do I create a HAR?
 
-You can use the DevTools in Chrome. See this unofficial tech support posting:
-[Generating a HAR file for troubleshooting][har-howto]. 
+See https://toolbox.googleapps.com/apps/har_analyzer/ for instructions on using
+your web browser to create a HAR file. Another option is to use 
+[browsermob-proxy](https://github.com/lightbody/browsermob-proxy) to capture a
+HAR. The Browsermob method captures some requests the web browser hides from you
+(because they are trackers or fetch data for browser internals).
 
-### How does it handle HTTPS?
+Debugging Travis Builds
+-----------------------
 
-It doesn't, really, but there is an imperfect workaround. The server will match
-HTTP requests to HTTPS entries in the HAR (for better or worse), so you only have
-to make sure that on the client side you make HTTP requests instead of HTTPS 
-requests. The proxy does not support TLS connections, so HTTPS requests will not
-go through and will probably not even return an HTTP response, because they 
-won't even make it to the replay request handler. So you have to intercept HTTPS 
-requests and replace the protocol with `http://`.
+If the Travis build is failing, you can test locally with Docker by running 
+`./travis-debug.sh`. However, the `mvn verify` command appears to exit early 
+but does not report a nonzero exit code, so it's not clear whether it's 
+actually succeeding or something funky is going on. It should be useful for 
+debugging failures that happen earlier, though. If the failure you see on 
+Travis happens later on in `mvn verify`, you can follow the Travis
+[Troubleshooting in a local container](https://docs.travis-ci.com/user/common-build-problems/)
+instructions, which say to execute:
 
-If you're using Chrome, you can use the [Switcheroo extension][switcheroo].
-If you're using Chrome through a WebDriver and can't perform the manual 
-configuration required by that extension, you can use a modified version of
-the extension included with this library. Check out the ModifiedSwitcheroo
-class, which you can use to create a CRX file (Chrome extension file). You can
-configure a `ChromeOptions` instance with that CRX file and pass it to the
-`ChromeDriver` constructor, and your webdriver instance will be started with
-the extension, which intercepts requests to HTTPS URLs and modifies the URL to
-use HTTP instead. See the unit tests for an example of this.
+    $ docker run --name travis-debug -dit $TRAVIS_IMAGE /sbin/init
+    $ docker exec -it travis-debug bash -l 
 
-Note that the extension will not rewrite URLs that are visited as a result of
-redirects. To swap HTTPS for HTTP in those URLs, you have to add a response
-header transform to the `ReplaySessionConfig` object.
-
-[har-replay-proxy]: https://github.com/mike10004/har-replay-proxy
-[switcheroo]: https://chrome.google.com/webstore/detail/switcheroo-redirector/cnmciclhnghalnpfhhleggldniplelbg
-[har-howto]: https://support.zendesk.com/hc/en-us/articles/204410413-Generating-a-HAR-file-for-troubleshooting
+This puts you inside the container, where you can `su -l travis`, clone the 
+repo, and proceed manually from there.

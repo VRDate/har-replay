@@ -6,10 +6,18 @@
 
     <groupId>com.github.mike10004</groupId>
     <artifactId>har-replay</artifactId>
-    <version>0.5</version>
-
+    <version>0.28</version>
     <name>har-replay</name>
     <description>Library that manages a proxy server that replays traffic from a HAR</description>
+    <packaging>pom</packaging>
+    <modules>
+        <module>virtual-har-server</module>
+        <module>har-replay-core</module>
+        <module>har-replay-exec</module>
+        <module>har-replay-test-support</module>
+        <module>har-replay-vhs</module>
+        <module>har-replay-dist</module>
+    </modules>
     <url>https://github.com/mike10004/har-replay</url>
     <inceptionYear>2016</inceptionYear>
     <licenses>
@@ -33,13 +41,18 @@
         <url>https://github.com/mike10004/har-replay</url>
     </scm>
     <properties>
+        <xvfb-manager.version>0.17</xvfb-manager.version>
+        <selenium.version>3.14.0</selenium.version>
+        <slf4j.version>1.7.25</slf4j.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <test.log.level>info</test.log.level>
         <npm.log.level>error</npm.log.level>
-        <har-replay-proxy-staging.install.directory>${project.build.directory}/har-replay-proxy-staging-install</har-replay-proxy-staging.install.directory>
-        <chrome.xvfb.disabled>false</chrome.xvfb.disabled>
         <chrome.executable>google-chrome</chrome.executable>
+        <crxtool.version>0.12</crxtool.version>
+        <nanochamp.version>0.14</nanochamp.version>
+        <common-helper.version>8.0.5</common-helper.version>
+        <jackson.version>2.9.7</jackson.version>
     </properties>
     <profiles>
         <profile>
@@ -60,38 +73,51 @@
             </properties>
         </profile>
         <profile>
-            <id>no-xvfb</id>
-            <activation>
-                <os>
-                    <family>!linux</family>
-                </os>
-            </activation>
-            <properties>
-                <chrome.xvfb.disabled>true</chrome.xvfb.disabled>
-            </properties>
+            <id>travis</id>
             <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.codehaus.mojo</groupId>
-                        <artifactId>exec-maven-plugin</artifactId>
-                        <executions>
-                            <execution>
-                                <id>noxvfb-pack-extension-modified-switcheroo</id>
-                                <phase>generate-resources</phase>
-                                <goals>
-                                    <goal>exec</goal>
-                                </goals>
-                                <configuration>
-                                    <executable>${chrome.executable}</executable>
-                                    <workingDirectory>${project.build.outputDirectory}</workingDirectory>
-                                    <arguments>
-                                        <argument>--pack-extension=${project.build.directory}/modified-switcheroo</argument>
-                                    </arguments>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
+                <pluginManagement>
+                    <plugins>
+                        <plugin>
+                            <artifactId>maven-surefire-plugin</artifactId>
+                            <configuration>
+                                <systemPropertyVariables>
+                                    <har-replay.chromedriver.chrome.arguments>--no-sandbox</har-replay.chromedriver.chrome.arguments>
+                                    <har-replay.chromedriver.chrome.executablePath>/usr/bin/chromium-browser</har-replay.chromedriver.chrome.executablePath>
+                                </systemPropertyVariables>
+                            </configuration>
+                        </plugin>
+                        <plugin>
+                            <artifactId>maven-failsafe-plugin</artifactId>
+                            <configuration>
+                                <systemPropertyVariables>
+                                    <har-replay.chromedriver.chrome.arguments>--no-sandbox</har-replay.chromedriver.chrome.arguments>
+                                    <har-replay.chromedriver.chrome.executablePath>/usr/bin/chromium-browser</har-replay.chromedriver.chrome.executablePath>
+                                </systemPropertyVariables>
+                            </configuration>
+                        </plugin>
+                    </plugins>
+                </pluginManagement>
+            </build>
+        </profile>
+        <profile>
+            <id>skip-tests</id>
+            <build>
+                <pluginManagement>
+                    <plugins>
+                        <plugin>
+                            <artifactId>maven-surefire-plugin</artifactId>
+                            <configuration>
+                                <skipTests>true</skipTests>
+                            </configuration>
+                        </plugin>
+                        <plugin>
+                            <artifactId>maven-failsafe-plugin</artifactId>
+                            <configuration>
+                                <skipTests>true</skipTests>
+                            </configuration>
+                        </plugin>
+                    </plugins>
+                </pluginManagement>
             </build>
         </profile>
     </profiles>
@@ -110,7 +136,7 @@
             <plugins>
                 <plugin>
                     <artifactId>maven-compiler-plugin</artifactId>
-                    <version>3.3</version>
+                    <version>3.6.0</version>
                     <configuration>
                         <source>1.8</source>
                         <target>1.8</target>
@@ -118,15 +144,16 @@
                 </plugin>
                 <plugin>
                     <artifactId>maven-surefire-plugin</artifactId>
-                    <version>2.19.1</version>
+                    <version>2.20.1</version>
                     <configuration>
                         <systemPropertyVariables>
-                            <java.io.tmpdir>${project.build.directory}</java.io.tmpdir>
-                            <wdm.targetPath>${project.build.directory}/webdriver</wdm.targetPath>
                             <org.slf4j.simpleLogger.defaultLogLevel>${test.log.level}</org.slf4j.simpleLogger.defaultLogLevel>
-                            <har-replay-proxy.port>${har-replay-proxy.port}</har-replay-proxy.port>
                         </systemPropertyVariables>
                     </configuration>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <version>2.20.1</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -139,22 +166,22 @@
                     <version>1.6.7</version>
                 </plugin>
                 <plugin>
-                    <groupId>com.github.eirslett</groupId><!-- https://repo1.maven.org/maven2/com/github/eirslett/frontend-maven-plugin/ -->
-                    <artifactId>frontend-maven-plugin</artifactId>
-                    <version>1.0</version>
-                    <configuration>
-                        <nodeVersion>v5.12.0</nodeVersion>
-                        <npmVersion>3.8.6</npmVersion>
-                    </configuration>
-                </plugin>
-                <plugin>
                     <groupId>org.codehaus.mojo</groupId>
                     <artifactId>exec-maven-plugin</artifactId>
                     <version>1.5.0</version>
                 </plugin>
                 <plugin>
-                    <artifactId>maven-antrun-plugin</artifactId>
-                    <version>1.8</version>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>3.0.1</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>build-helper-maven-plugin</artifactId>
+                    <version>1.12</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-assembly-plugin</artifactId>
+                    <version>3.1.0</version>
                 </plugin>
             </plugins>
         </pluginManagement>
@@ -213,191 +240,6 @@
                 <artifactId>sonar-maven-plugin</artifactId>
                 <version>2.7.1</version>
             </plugin>
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>build-helper-maven-plugin</artifactId>
-                <version>1.12</version>
-                <executions>
-                    <execution>
-                        <id>reserve-port-for-unit-tests</id>
-                        <goals>
-                            <goal>reserve-network-port</goal>
-                        </goals>
-                        <configuration>
-                            <portNames>
-                                <portName>har-replay-proxy.port</portName>
-                            </portNames>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <artifactId>maven-resources-plugin</artifactId>
-                <version>3.0.1</version>
-                <executions>
-                    <execution>
-                        <id>stage-switcheroo-sources</id>
-                        <phase>generate-resources</phase>
-                        <goals>
-                            <goal>copy-resources</goal>
-                        </goals>
-                        <configuration>
-                            <outputDirectory>${project.build.directory}/modified-switcheroo</outputDirectory>
-                            <resources>
-                                <resource>
-                                    <directory>${project.basedir}/src/main/modified-switcheroo</directory>
-                                    <filtering>false</filtering>
-                                </resource>
-                            </resources>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>embed-switcheroo</id>
-                        <phase>process-classes</phase>
-                        <goals>
-                            <goal>copy-resources</goal>
-                        </goals>
-                        <configuration>
-                            <outputDirectory>${project.build.outputDirectory}</outputDirectory>
-                            <resources>
-                                <resource>
-                                    <directory>${project.build.directory}</directory>
-                                    <includes>
-                                        <include>modified-switcheroo.crx</include>
-                                    </includes>
-                                </resource>
-                            </resources>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <artifactId>maven-antrun-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>delete-switcheroo-pem</id>
-                        <phase>generate-resources</phase>
-                        <goals>
-                            <goal>run</goal>
-                        </goals>
-                        <configuration>
-                            <target>
-                                <delete file="${project.build.directory}/modified-switcheroo.pem" verbose="true" failonerror="false"/>
-                            </target>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>delete-har-replay-proxy-staging-dir</id>
-                        <phase>generate-resources</phase>
-                        <goals>
-                            <goal>run</goal>
-                        </goals>
-                        <configuration>
-                            <target>
-                                <delete dir="${project.build.directory}/har-replay-proxy" verbose="false" failonerror="false"/>
-                            </target>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>exec-maven-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>pack-extension-modified-switcheroo</id>
-                        <phase>generate-resources</phase>
-                        <goals>
-                            <goal>exec</goal>
-                        </goals>
-                        <configuration>
-                            <skip>${chrome.xvfb.disabled}</skip>
-                            <executable>xvfb-run</executable>
-                            <workingDirectory>${project.build.outputDirectory}</workingDirectory>
-                            <arguments>
-                                <argument>${chrome.executable}</argument>
-                                <argument>--pack-extension=${project.build.directory}/modified-switcheroo</argument>
-                            </arguments>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <!--We could consider using a git submodule for this, but then we'd have to remind people
-                            to clone recursively. Instead, this limits the universality of the build because it
-                            will fail if the host does not have git installed and callable from the working
-                            directory (target), which is okay for now.
-
-                            Alternatively, now that that code is stable (as signified by the fact that we're cloning
-                            a tag), we could just include it as a zip file or as source files directly.
-                             -->
-                        <id>stage-har-replay-proxy-module</id>
-                        <phase>generate-resources</phase>
-                        <goals>
-                            <goal>exec</goal>
-                        </goals>
-                        <configuration>
-                            <workingDirectory>${project.build.directory}</workingDirectory>
-                            <executable>git</executable>
-                            <arguments>
-                                <argument>-c</argument>
-                                <argument>advice.detachedHead=false</argument>
-                                <argument>clone</argument>
-                                <argument>https://github.com/mike10004/har-replay-proxy</argument>
-                                <argument>--branch</argument>
-                                <argument>0.0.1</argument>
-                                <argument>--single-branch</argument>
-                                <argument>${project.build.directory}/har-replay-proxy</argument>
-                                <argument>--quiet</argument>
-                            </arguments>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>com.github.eirslett</groupId><!-- https://repo1.maven.org/maven2/com/github/eirslett/frontend-maven-plugin/ -->
-                <artifactId>frontend-maven-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <phase>generate-resources</phase>
-                        <id>do-install-node-and-npm</id>
-                        <goals>
-                            <goal>install-node-and-npm</goal>
-                        </goals>
-                        <configuration>
-                            <workingDirectory>${project.build.directory}/har-replay-proxy</workingDirectory>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>har-replay-proxy-staging-npm-install</id>
-                        <phase>generate-resources</phase>
-                        <goals>
-                            <goal>npm</goal>
-                        </goals>
-                        <configuration>
-                            <workingDirectory>${project.build.directory}/har-replay-proxy</workingDirectory>
-                            <arguments>install --loglevel=${npm.log.level} --production</arguments>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <artifactId>maven-assembly-plugin</artifactId>
-                <version>2.6</version>
-                <executions>
-                    <execution>
-                        <id>embed-har-replay-proxy</id>
-                        <phase>generate-resources</phase>
-                        <goals>
-                            <goal>single</goal>
-                        </goals>
-                        <configuration>
-                            <appendAssemblyId>false</appendAssemblyId>
-                            <finalName>har-replay-proxy</finalName>
-                            <descriptor>src/assembly/har-replay-proxy-zip.xml</descriptor>
-                            <outputDirectory>${project.build.outputDirectory}</outputDirectory>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
         </plugins>
     </build>
     <dependencyManagement>
@@ -405,7 +247,12 @@
             <dependency>
                 <groupId>org.seleniumhq.selenium</groupId>
                 <artifactId>selenium-remote-driver</artifactId>
-                <version>3.0.1</version>
+                <version>${selenium.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.seleniumhq.selenium</groupId>
+                <artifactId>selenium-java</artifactId>
+                <version>${selenium.version}</version>
             </dependency>
             <dependency>
                 <groupId>net.sourceforge.htmlunit</groupId>
@@ -415,126 +262,149 @@
             <dependency>
                 <groupId>org.slf4j</groupId>
                 <artifactId>slf4j-simple</artifactId>
-                <version>1.7.21</version>
+                <version>${slf4j.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.slf4j</groupId>
-                <artifactId>jcl-over-slf4j</artifactId>
-                <version>1.7.21</version>
+                <artifactId>slf4j-jdk14</artifactId>
+                <version>${slf4j.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.slf4j</groupId>
                 <artifactId>slf4j-api</artifactId>
-                <version>1.7.21</version>
+                <version>${slf4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.guava</groupId>
+                <artifactId>guava</artifactId>
+                <version>24.1-jre</version>
+            </dependency>
+            <dependency>
+                <groupId>junit</groupId>
+                <artifactId>junit</artifactId>
+                <version>4.12</version>
+            </dependency>
+            <dependency>
+                <groupId>commons-io</groupId>
+                <artifactId>commons-io</artifactId>
+                <version>2.6</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-lang3</artifactId>
+                <version>3.6</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-text</artifactId>
+                <version>1.3</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.code.gson</groupId>
+                <artifactId>gson</artifactId>
+                <version>2.8.2</version>
+            </dependency>
+            <dependency>
+                <groupId>de.sstoehr</groupId>
+                <artifactId>har-reader</artifactId>
+                <version>2.0.1</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.mike10004</groupId>
+                <artifactId>crxtool-core</artifactId>
+                <version>${crxtool.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.nanohttpd</groupId>
+                <artifactId>nanohttpd</artifactId>
+                <version>2.3.0</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.code.findbugs</groupId>
+                <artifactId>jsr305</artifactId>
+                <version>3.0.1</version>
+            </dependency>
+            <dependency>
+                <groupId>edu.umass.cs.benchlab</groupId>
+                <artifactId>harlib</artifactId>
+                <version>1.1.2</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.httpcomponents</groupId>
+                <artifactId>httpclient</artifactId>
+                <version>4.5.5</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.httpcomponents</groupId>
+                <artifactId>httpcore</artifactId>
+                <version>4.4.9</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.mike10004</groupId>
+                <artifactId>nanohttpd-server</artifactId>
+                <version>${nanochamp.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.lightbody.bmp</groupId>
+                <artifactId>browsermob-core</artifactId>
+                <version>2.1.5</version>
+            </dependency>
+            <dependency>
+                <groupId>org.brotli</groupId>
+                <artifactId>dec</artifactId>
+                <version>0.1.2</version>
+            </dependency>
+            <dependency>
+                <groupId>commons-validator</groupId>
+                <artifactId>commons-validator</artifactId>
+                <version>1.6</version>
+            </dependency>
+            <dependency>
+                <groupId>org.seleniumhq.selenium</groupId>
+                <artifactId>selenium-support</artifactId>
+                <version>${selenium.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.bonigarcia</groupId>
+                <artifactId>webdrivermanager</artifactId>
+                <version>2.1.0</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-core</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-annotations</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.zeroturnaround</groupId>
+                <artifactId>zt-exec</artifactId>
+                <version>1.10</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.mike10004</groupId>
+                <artifactId>native-helper</artifactId>
+                <version>${common-helper.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.mike10004</groupId>
+                <artifactId>imnetio-helper</artifactId>
+                <version>${common-helper.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
     <dependencies>
         <dependency>
-            <groupId>com.google.code.gson</groupId>
-            <artifactId>gson</artifactId>
-            <version>2.8.0</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.httpcomponents</groupId>
-            <artifactId>httpclient</artifactId>
-            <version>4.5.2</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.google.guava</groupId>
-            <artifactId>guava</artifactId>
-            <version>20.0</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.commons</groupId>
-            <artifactId>commons-lang3</artifactId>
-            <version>3.5</version>
-        </dependency>
-        <dependency>
-            <groupId>de.sstoehr</groupId>
-            <artifactId>har-reader</artifactId>
-            <version>2.0.1</version>
-        </dependency>
-        <dependency>
-            <groupId>com.github.mike10004</groupId>
-            <artifactId>native-helper</artifactId>
-            <version>6.0.0</version>
-        </dependency>
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-simple</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <version>4.12</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
             <groupId>com.google.code.findbugs</groupId>
             <artifactId>jsr305</artifactId>
-            <version>3.0.1</version>
-        </dependency>
-        <dependency>
-            <groupId>io.github.bonigarcia</groupId>
-            <artifactId>webdrivermanager</artifactId>
-            <version>1.5.0</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>commons-io</groupId>
-            <artifactId>commons-io</artifactId>
-            <version>2.5</version>
-        </dependency>
-        <dependency>
-            <groupId>org.seleniumhq.selenium</groupId>
-            <artifactId>selenium-java</artifactId>
-            <version>3.0.1</version>
-            <scope>test</scope>
-            <exclusions>
-                <exclusion>
-                    <groupId>net.sourceforge.htmlunit</groupId>
-                    <artifactId>htmlunit</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>com.codeborne</groupId>
-                    <artifactId>phantomjsdriver</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.seleniumhq.selenium</groupId>
-                    <artifactId>selenium-safari-driver</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.seleniumhq.selenium</groupId>
-                    <artifactId>selenium-opera-driver</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.seleniumhq.selenium</groupId>
-                    <artifactId>selenium-edge-driver</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.seleniumhq.selenium</groupId>
-                    <artifactId>selenium-ie-driver</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.github.mike10004</groupId>
-            <artifactId>xvfb-testing</artifactId>
-            <version>0.5</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.github.mike10004</groupId>
-            <artifactId>xvfb-selenium</artifactId>
-            <version>0.5</version>
-            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

@@ -4,5 +4,11 @@ addons:
   apt:
     packages:
     - chromium-browser
+    - fakeroot
+notifications:
+  email: false
+before_install:
+  - dpkg-query -l chromium-browser
 install: true
-script: mvn --settings travis-maven-settings.xml verify -B
+script:
+  - mvn --batch-mode $MAVEN_OPTIONS --settings travis-maven-settings.xml -Ptravis -Dwdm.chromeDriverVersion=$CHROMEDRIVER_VERSION install
