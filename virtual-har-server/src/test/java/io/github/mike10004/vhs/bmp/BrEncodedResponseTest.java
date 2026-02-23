@@ -9,10 +9,10 @@ import com.google.common.io.Files;
 import com.google.common.io.Resources;
 import com.google.common.net.HostAndPort;
 import com.google.common.net.MediaType;
-import de.sstoehr.harreader.HarReader;
-import de.sstoehr.harreader.model.Har;
-import de.sstoehr.harreader.model.HarHeader;
-import de.sstoehr.harreader.model.HarResponse;
+import com.browserup.harreader.HarReader;
+import com.browserup.harreader.model.Har;
+import com.browserup.harreader.model.HarHeader;
+import com.browserup.harreader.model.HarResponse;
 import io.github.mike10004.harreplay.tests.ChromeDriverSetupRule;
 import io.github.mike10004.harreplay.tests.ChromeOptionsProducer;
 import io.github.mike10004.vhs.VirtualHarServer;
@@ -69,7 +69,8 @@ public class BrEncodedResponseTest {
                     .usingAnyFreePort()
                     .withEnvironment(env)
                     .build();
-            ChromeOptions options = ChromeOptionsProducer.standard().produceOptions(proxyAddress);
+            ChromeOptions options = new ChromeOptions();
+            ChromeOptionsProducer.standard().produceOptions(proxyAddress).accept(options);
             WebDriver driver = new ChromeDriver(service, options);
             try {
                 driver.get(url.toString());

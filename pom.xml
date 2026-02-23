@@ -6,7 +6,7 @@
 
     <groupId>com.github.mike10004</groupId>
     <artifactId>har-replay</artifactId>
-    <version>0.28</version>
+    <version>0.32</version>
     <name>har-replay</name>
     <description>Library that manages a proxy server that replays traffic from a HAR</description>
     <packaging>pom</packaging>
@@ -41,18 +41,22 @@
         <url>https://github.com/mike10004/har-replay</url>
     </scm>
     <properties>
-        <xvfb-manager.version>0.17</xvfb-manager.version>
-        <selenium.version>3.14.0</selenium.version>
+        <xvfb-manager.version>0.19</xvfb-manager.version>
+        <selenium.version>3.141.59</selenium.version>
+        <selenium-capture.version>0.56</selenium-capture.version>
         <slf4j.version>1.7.25</slf4j.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <test.log.level>info</test.log.level>
         <npm.log.level>error</npm.log.level>
         <chrome.executable>google-chrome</chrome.executable>
-        <crxtool.version>0.12</crxtool.version>
+        <crxtool.version>0.16</crxtool.version>
         <nanochamp.version>0.14</nanochamp.version>
-        <common-helper.version>8.0.5</common-helper.version>
-        <jackson.version>2.9.7</jackson.version>
+        <common-helper.version>10.0.0</common-helper.version>
+        <subprocess.version>0.4</subprocess.version>
+        <jackson.version>2.10.2</jackson.version>
+        <!--suppress UnresolvedMavenProperty -->
+        <chromedriver.version>${env.CHROMEDRIVER_VERSION}</chromedriver.version>
     </properties>
     <profiles>
         <profile>
@@ -81,6 +85,7 @@
                             <artifactId>maven-surefire-plugin</artifactId>
                             <configuration>
                                 <systemPropertyVariables>
+                                    <har-replay.travis>true</har-replay.travis>
                                     <har-replay.chromedriver.chrome.arguments>--no-sandbox</har-replay.chromedriver.chrome.arguments>
                                     <har-replay.chromedriver.chrome.executablePath>/usr/bin/chromium-browser</har-replay.chromedriver.chrome.executablePath>
                                 </systemPropertyVariables>
@@ -90,6 +95,7 @@
                             <artifactId>maven-failsafe-plugin</artifactId>
                             <configuration>
                                 <systemPropertyVariables>
+                                    <har-replay.travis>true</har-replay.travis>
                                     <har-replay.chromedriver.chrome.arguments>--no-sandbox</har-replay.chromedriver.chrome.arguments>
                                     <har-replay.chromedriver.chrome.executablePath>/usr/bin/chromium-browser</har-replay.chromedriver.chrome.executablePath>
                                 </systemPropertyVariables>
@@ -120,6 +126,19 @@
                 </pluginManagement>
             </build>
         </profile>
+        <!-- more profiles specifying chromedriver version may be necessary; see https://chromedriver.chromium.org/downloads -->
+        <profile>
+            <id>chrome-77</id>
+            <properties>
+                <chromedriver.version>77.0.3865.40</chromedriver.version>
+            </properties>
+        </profile>
+        <profile>
+            <id>chrome-79</id>
+            <properties>
+                <chromedriver.version>79.0.3945.36</chromedriver.version>
+            </properties>
+        </profile>
     </profiles>
     <distributionManagement>
         <snapshotRepository>
@@ -136,7 +155,7 @@
             <plugins>
                 <plugin>
                     <artifactId>maven-compiler-plugin</artifactId>
-                    <version>3.6.0</version>
+                    <version>3.8.1</version>
                     <configuration>
                         <source>1.8</source>
                         <target>1.8</target>
@@ -144,16 +163,24 @@
                 </plugin>
                 <plugin>
                     <artifactId>maven-surefire-plugin</artifactId>
-                    <version>2.20.1</version>
+                    <version>3.0.0-M3</version>
                     <configuration>
                         <systemPropertyVariables>
+                            <java.io.tmpdir>${project.build.directory}</java.io.tmpdir>
                             <org.slf4j.simpleLogger.defaultLogLevel>${test.log.level}</org.slf4j.simpleLogger.defaultLogLevel>
+                            <wdm.chromeDriverVersion>${chromedriver.version}</wdm.chromeDriverVersion>
                         </systemPropertyVariables>
                     </configuration>
                 </plugin>
                 <plugin>
                     <artifactId>maven-failsafe-plugin</artifactId>
-                    <version>2.20.1</version>
+                    <version>3.0.0-M3</version>
+                    <configuration>
+                        <systemPropertyVariables>
+                            <java.io.tmpdir>${project.build.directory}</java.io.tmpdir>
+                            <wdm.chromeDriverVersion>${chromedriver.version}</wdm.chromeDriverVersion>
+                        </systemPropertyVariables>
+                    </configuration>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -168,7 +195,7 @@
                 <plugin>
                     <groupId>org.codehaus.mojo</groupId>
                     <artifactId>exec-maven-plugin</artifactId>
-                    <version>1.5.0</version>
+                    <version>1.6.0</version>
                 </plugin>
                 <plugin>
                     <artifactId>maven-resources-plugin</artifactId>
@@ -183,12 +210,17 @@
                     <artifactId>maven-assembly-plugin</artifactId>
                     <version>3.1.0</version>
                 </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-antrun-plugin</artifactId>
+                    <version>1.8</version>
+                </plugin>
             </plugins>
         </pluginManagement>
         <plugins>
             <plugin>
                 <artifactId>maven-source-plugin</artifactId>
-                <version>3.0.1</version>
+                <version>3.1.0</version>
                 <executions>
                     <execution>
                         <id>attach-sources</id>
@@ -201,7 +233,11 @@
             </plugin>
             <plugin>
                 <artifactId>maven-javadoc-plugin</artifactId>
-                <version>2.10.4</version>
+                <version>3.1.1</version>
+                <configuration>
+                    <javadocExecutable>${java.home}/bin/javadoc</javadocExecutable>
+                    <source>8</source>
+                </configuration>
                 <executions>
                     <execution>
                         <id>attach-javadocs</id>
@@ -211,6 +247,10 @@
                         </goals>
                     </execution>
                 </executions>
+            </plugin>
+            <plugin>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.1.2</version>
             </plugin>
             <plugin>
                 <artifactId>maven-gpg-plugin</artifactId>
@@ -277,7 +317,7 @@
             <dependency>
                 <groupId>com.google.guava</groupId>
                 <artifactId>guava</artifactId>
-                <version>24.1-jre</version>
+                <version>28.1-jre</version>
             </dependency>
             <dependency>
                 <groupId>junit</groupId>
@@ -292,12 +332,12 @@
             <dependency>
                 <groupId>org.apache.commons</groupId>
                 <artifactId>commons-lang3</artifactId>
-                <version>3.6</version>
+                <version>3.9</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.commons</groupId>
                 <artifactId>commons-text</artifactId>
-                <version>1.3</version>
+                <version>1.4</version>
             </dependency>
             <dependency>
                 <groupId>com.google.code.gson</groupId>
@@ -307,17 +347,12 @@
             <dependency>
                 <groupId>de.sstoehr</groupId>
                 <artifactId>har-reader</artifactId>
-                <version>2.0.1</version>
+                <version>2.1.5</version>
             </dependency>
             <dependency>
                 <groupId>com.github.mike10004</groupId>
                 <artifactId>crxtool-core</artifactId>
                 <version>${crxtool.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.nanohttpd</groupId>
-                <artifactId>nanohttpd</artifactId>
-                <version>2.3.0</version>
             </dependency>
             <dependency>
                 <groupId>com.google.code.findbugs</groupId>
@@ -345,9 +380,26 @@
                 <version>${nanochamp.version}</version>
             </dependency>
             <dependency>
-                <groupId>net.lightbody.bmp</groupId>
-                <artifactId>browsermob-core</artifactId>
-                <version>2.1.5</version>
+                <groupId>com.browserup</groupId>
+                <artifactId>browserup-proxy-core</artifactId>
+                <version>2.0.1</version>
+            </dependency>
+            <dependency>
+                <groupId>com.browserup</groupId>
+                <artifactId>browserup-proxy-mitm</artifactId>
+                <version>2.0.1</version>
+            </dependency>
+            <dependency>
+                <!-- included so that dependencies that bring netty in transitively use this version -->
+                <groupId>io.netty</groupId>
+                <artifactId>netty-all</artifactId>
+                <version>4.1.42.Final</version>
+            </dependency>
+            <dependency>
+                <!-- this must be kept in sync with version required by browserup-proxy-core -->
+                <groupId>xyz.rogfam</groupId>
+                <artifactId>littleproxy</artifactId>
+                <version>2.0.0-beta-5</version>
             </dependency>
             <dependency>
                 <groupId>org.brotli</groupId>
@@ -367,7 +419,7 @@
             <dependency>
                 <groupId>io.github.bonigarcia</groupId>
                 <artifactId>webdrivermanager</artifactId>
-                <version>2.1.0</version>
+                <version>3.7.1</version>
             </dependency>
             <dependency>
                 <groupId>com.fasterxml.jackson.core</groupId>
@@ -396,8 +448,73 @@
             </dependency>
             <dependency>
                 <groupId>com.github.mike10004</groupId>
+                <artifactId>subprocess</artifactId>
+                <version>${subprocess.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.mike10004</groupId>
                 <artifactId>imnetio-helper</artifactId>
                 <version>${common-helper.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.mike10004</groupId>
+                <artifactId>selenium-capture</artifactId>
+                <version>${selenium-capture.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.mike10004</groupId>
+                <artifactId>nitsick-core</artifactId>
+                <version>0.2</version>
+            </dependency>
+            <dependency>
+                <groupId>com.opencsv</groupId>
+                <artifactId>opencsv</artifactId>
+                <version>4.6</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tika</groupId>
+                <artifactId>tika-core</artifactId>
+                <version>1.22</version>
+            </dependency>
+            <dependency>
+                <groupId>org.easymock</groupId>
+                <artifactId>easymock</artifactId>
+                <version>3.5.1</version>
+            </dependency>
+            <dependency>
+                <groupId>org.freemarker</groupId>
+                <artifactId>freemarker</artifactId>
+                <version>2.3.27-incubating</version>
+            </dependency>
+            <dependency>
+                <groupId>com.jayway.jsonpath</groupId>
+                <artifactId>json-path</artifactId>
+                <version>2.4.0</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.mike10004</groupId>
+                <artifactId>xvfb-testing</artifactId>
+                <version>${xvfb-manager.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.mike10004</groupId>
+                <artifactId>xvfb-manager</artifactId>
+                <version>${xvfb-manager.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.mike10004</groupId>
+                <artifactId>sample-image-generator</artifactId>
+                <version>0.3</version>
+            </dependency>
+            <dependency>
+                <groupId>org.seleniumhq.selenium</groupId>
+                <artifactId>selenium-chrome-driver</artifactId>
+                <version>${selenium.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.sf.jopt-simple</groupId>
+                <artifactId>jopt-simple</artifactId>
+                <version>5.0.4</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

@@ -1,8 +1,5 @@
 package io.github.mike10004.harreplay.tests;
 
-import com.github.mike10004.nativehelper.subprocess.ProcessResult;
-import com.github.mike10004.nativehelper.subprocess.ScopedProcessTracker;
-import com.github.mike10004.nativehelper.subprocess.Subprocess;
 import com.github.mike10004.seleniumhelp.AutoCertificateAndKeySource;
 import com.github.mike10004.seleniumhelp.ChromeWebDriverFactory;
 import com.github.mike10004.seleniumhelp.TrafficCollector;
@@ -12,23 +9,24 @@ import com.github.mike10004.xvfbmanager.XvfbManager;
 import com.google.common.base.CharMatcher;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.BaseEncoding;
-import com.google.common.io.ByteSource;
 import com.google.common.io.CharSource;
 import com.google.common.io.Files;
 import com.google.common.net.HostAndPort;
 import com.google.common.net.MediaType;
-import de.sstoehr.harreader.HarReader;
-import de.sstoehr.harreader.HarReaderMode;
-import fi.iki.elonen.NanoHTTPD;
-import fi.iki.elonen.NanoHTTPD.Response.Status;
+import com.browserup.harreader.HarReader;
+import com.browserup.harreader.HarReaderMode;
 import freemarker.template.Template;
 import freemarker.template.TemplateException;
 import freemarker.template.TemplateExceptionHandler;
 import io.github.mike10004.harreplay.tests.Fixtures.JavascriptRedirectInfo;
-import net.lightbody.bmp.BrowserMobProxy;
-import net.lightbody.bmp.BrowserMobProxyServer;
-import net.lightbody.bmp.mitm.CertificateAndKeySource;
-import net.lightbody.bmp.mitm.manager.ImpersonatingMitmManager;
+import io.github.mike10004.nanochamp.repackaged.fi.iki.elonen.NanoHTTPD;
+import io.github.mike10004.subprocess.ProcessResult;
+import io.github.mike10004.subprocess.ScopedProcessTracker;
+import io.github.mike10004.subprocess.Subprocess;
+import com.browserup.bup.BrowserUpProxy;
+import com.browserup.bup.BrowserUpProxyServer;
+import com.browserup.bup.mitm.CertificateAndKeySource;
+import com.browserup.bup.mitm.manager.ImpersonatingMitmManager;
 import org.apache.commons.io.FileUtils;
 import org.apache.http.client.utils.URIBuilder;
 import org.littleshoot.proxy.MitmManager;
@@ -37,7 +35,6 @@ import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import java.io.ByteArrayInputStream;
@@ -51,9 +48,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.security.KeyStore;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -104,7 +99,7 @@ public class TrickySite {
         byte[] keystoreBytes;
         try (ScopedProcessTracker processTracker = new ScopedProcessTracker()) {
             ProcessResult<?, ?> result = proc.launcher(processTracker)
-                    .outputStrings(Charset.defaultCharset(), ByteSource.empty())
+                    .outputStrings(Charset.defaultCharset())
                     .launch().await(5, TimeUnit.SECONDS);
             if (result.exitCode() != 0) {
                 throw new IllegalStateException("nonzero exit code " + result.exitCode());
@@ -199,15 +194,15 @@ public class TrickySite {
                     return createPageWithTrickyRedirect();
                 }
                 System.err.format("returning 404 for %s %s%n", session.getMethod(), session.getUri());
-                return NanoHTTPD.newFixedLengthResponse(Status.NOT_FOUND, "text/plain", "404 Not Found: " + url.getPath());
+                return NanoHTTPD.newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "404 Not Found: " + url.getPath());
             } catch (Exception e) {
                 LoggerFactory.getLogger(TrickySite.class).error("failure to serve", e);
-                return NanoHTTPD.newFixedLengthResponse(Status.INTERNAL_ERROR, "text/plain", e.toString());
+                return NanoHTTPD.newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", e.toString());
             }
         }
 
         private NanoHTTPD.Response createFavicon() {
-            return NanoHTTPD.newFixedLengthResponse(Status.OK, FAVICON_CONTENT_TYPE.toString(), new ByteArrayInputStream(faviconBytes), faviconBytes.length);
+            return NanoHTTPD.newFixedLengthResponse(Response.Status.OK, FAVICON_CONTENT_TYPE.toString(), new ByteArrayInputStream(faviconBytes), faviconBytes.length);
         }
 
         private NanoHTTPD.Response createStartPage() throws IOException, TemplateException {
@@ -218,7 +213,7 @@ public class TrickySite {
                     "  </body>\n" +
                     "</html>\n";
             String rendered = render(htmlTemplate, model);
-            return NanoHTTPD.newFixedLengthResponse(Status.OK, "text/html", rendered);
+            return NanoHTTPD.newFixedLengthResponse(Response.Status.OK, "text/html", rendered);
         }
 
         private boolean isPath(URI url, String path) {
@@ -238,7 +233,7 @@ public class TrickySite {
         }
 
         private NanoHTTPD.Response createRedirectDestinationPage() {
-            return NanoHTTPD.newFixedLengthResponse(Status.OK, "text/plain", JavascriptRedirectInfo.OTHER_PAGE_TEXT);
+            return NanoHTTPD.newFixedLengthResponse(Response.Status.OK, "text/plain", JavascriptRedirectInfo.OTHER_PAGE_TEXT);
         }
 
         private NanoHTTPD.Response createPageWithTrickyRedirect() throws IOException, TemplateException {
@@ -252,7 +247,7 @@ public class TrickySite {
                     "</body>\n" +
                     "</html>\n";
             String renderedPage = render(templateHtml, model);
-            return NanoHTTPD.newFixedLengthResponse(Status.OK, "text/html", renderedPage);
+            return NanoHTTPD.newFixedLengthResponse(Response.Status.OK, "text/html", renderedPage);
         }
 
         private NanoHTTPD.Response createRedirectingScript() throws IOException, TemplateException {
@@ -261,7 +256,7 @@ public class TrickySite {
                     "  window.location = \"${redirectDestination}\";\n" +
                     "}, 1);\n";
             String rendered = render(template, model);
-            return NanoHTTPD.newFixedLengthResponse(Status.OK, REDIRECTING_SCRIPT_CONTENT_TYPE, rendered);
+            return NanoHTTPD.newFixedLengthResponse(Response.Status.OK, REDIRECTING_SCRIPT_CONTENT_TYPE, rendered);
         }
 
         static freemarker.template.Configuration createFreemarkerConfig() {
@@ -284,50 +279,16 @@ public class TrickySite {
 
     }
 
-    private static class TrustingTrafficCollector extends TrafficCollector {
-
-        public TrustingTrafficCollector(TrafficCollector.Builder builder) {
-            super(builder);
-
-        }
-
-        @Override
-        protected MitmManager createMitmManager(BrowserMobProxy proxy, CertificateAndKeySource certificateAndKeySource) {
+    private static Supplier<BrowserUpProxy> browsermobInstantiator(CertificateAndKeySource certificateAndKeySource) {
+        return () -> {
+            BrowserUpProxyServer server = new BrowserUpProxyServer();
             MitmManager mitmManager = ImpersonatingMitmManager.builder()
                     .rootCertificateSource(certificateAndKeySource)
                     .trustAllServers(true)
                     .build();
-            return mitmManager;
-        }
-    }
-
-    private static Supplier<BrowserMobProxy> browsermobInstantiator() {
-        return BrowserMobProxyServer::new;
-    }
-
-    private interface BrowserCommandLineBuilder {
-
-        Subprocess build(HostAndPort proxySocketAddress);
-
-        static List<String> createArgs(Path userDataDir, URI startUrl, @Nullable HostAndPort proxySocketAddress) {
-            List<String> args = new ArrayList<>();
-            args.add("--no-first-run");
-            args.add("--user-data-dir=" + userDataDir.toFile().getAbsolutePath());
-            args.add("--allow-insecure-localhost");
-            if (proxySocketAddress != null) {
-                args.add("--proxy-server=" + proxySocketAddress.toString());
-            }
-            args.add(startUrl.toString());
-            return args;
-        }
-
-        static BrowserCommandLineBuilder chrome(Path userDataDir, URI startUrl) {
-            return proxySocketAddress -> {
-                Subprocess.Builder b = Subprocess.running("google-chrome")
-                        .args(createArgs(userDataDir, startUrl, proxySocketAddress));
-                return b.build();
-            };
-        }
+            server.setMitmManager(mitmManager);
+            return server;
+        };
     }
 
     public void captureHar(File destinationHarFile) throws Exception {
@@ -355,10 +316,12 @@ public class TrickySite {
             URI startUrl = server.getStartUrl();
             ChromeWebDriverFactory factory = ChromeWebDriverFactory.builder()
                     .environment(xvfbController.newEnvironment()).build();
-            TrafficCollector collector = new TrustingTrafficCollector(TrafficCollector.builder(factory)
-                    .collectHttps(new AutoCertificateAndKeySource(tempDir))
-                    .localProxyInstantiator(browsermobInstantiator()));
-            net.lightbody.bmp.core.har.Har har = collector.collect(new TrafficGenerator<Void>() {
+            CertificateAndKeySource certificateAndKeySource = new AutoCertificateAndKeySource(tempDir);
+            TrafficCollector collector = TrafficCollector.builder(factory)
+                    .collectHttps(certificateAndKeySource)
+                    .interceptingProxyInstantiator(browsermobInstantiator(certificateAndKeySource))
+                    .build();
+            com.browserup.harreader.model.Har har = collector.collect(new TrafficGenerator<Void>() {
                 @Override
                 public Void generate(WebDriver driver) throws IOException {
                     System.out.format("visiting %s%n", startUrl);
@@ -379,7 +342,7 @@ public class TrickySite {
         }
     }
 
-    private static void writeHar(net.lightbody.bmp.core.har.Har har, File harFile) throws IOException {
+    private static void writeHar(com.browserup.harreader.model.Har har, File harFile) throws IOException {
         new com.fasterxml.jackson.databind.ObjectMapper()
             .writerWithDefaultPrettyPrinter().writeValue(harFile, har);
     }
@@ -393,7 +356,7 @@ public class TrickySite {
         checkState(replacement.length() == serverSocketAddress.length(), "replacement length must equal original address length: %s and %s", serverSocketAddress, replacement);
         new TrickySite(server).captureHar(harFile);
         System.out.format("%s created%n", harFile);
-        de.sstoehr.harreader.model.Har har = new HarReader().readFromFile(harFile, HarReaderMode.LAX);
+        com.browserup.harreader.model.Har har = new HarReader().readFromFile(harFile, HarReaderMode.LAX);
         new HarInfoDumper.SummaryDumper().dump(har.getLog().getEntries(), System.out);
         System.out.println();
         Pattern serverSocketAddressPattern = Pattern.compile(Pattern.quote(serverSocketAddress));

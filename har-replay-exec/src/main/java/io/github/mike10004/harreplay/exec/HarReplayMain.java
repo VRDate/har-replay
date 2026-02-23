@@ -1,7 +1,7 @@
 package io.github.mike10004.harreplay.exec;
 
-import com.github.mike10004.nativehelper.subprocess.ProcessMonitor;
-import com.github.mike10004.nativehelper.subprocess.ScopedProcessTracker;
+import io.github.mike10004.subprocess.ProcessMonitor;
+import io.github.mike10004.subprocess.ScopedProcessTracker;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.Files;
@@ -9,11 +9,11 @@ import com.google.common.net.HostAndPort;
 import com.google.common.util.concurrent.Uninterruptibles;
 import com.google.gson.Gson;
 import com.opencsv.CSVReader;
-import de.sstoehr.harreader.HarReader;
-import de.sstoehr.harreader.HarReaderException;
-import de.sstoehr.harreader.HarReaderMode;
-import de.sstoehr.harreader.model.Har;
-import de.sstoehr.harreader.model.HarEntry;
+import com.browserup.harreader.HarReader;
+import com.browserup.harreader.HarReaderException;
+import com.browserup.harreader.HarReaderMode;
+import com.browserup.harreader.model.Har;
+import com.browserup.harreader.model.HarEntry;
 import io.github.mike10004.harreplay.ReplayManager;
 import io.github.mike10004.harreplay.ReplayServerConfig;
 import io.github.mike10004.harreplay.ReplaySessionConfig;

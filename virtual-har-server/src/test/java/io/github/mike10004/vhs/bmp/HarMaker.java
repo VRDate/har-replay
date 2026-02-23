@@ -2,13 +2,15 @@ package io.github.mike10004.vhs.bmp;
 
 import com.google.common.net.HostAndPort;
 import com.google.common.util.concurrent.Uninterruptibles;
-import net.lightbody.bmp.BrowserMobProxy;
-import net.lightbody.bmp.BrowserMobProxyServer;
-import net.lightbody.bmp.core.har.Har;
-import net.lightbody.bmp.core.har.HarEntry;
-import net.lightbody.bmp.core.har.HarNameValuePair;
-import net.lightbody.bmp.core.har.HarRequest;
-import net.lightbody.bmp.proxy.CaptureType;
+import io.github.mike10004.nanochamp.repackaged.fi.iki.elonen.NanoHTTPD;
+import com.browserup.bup.BrowserUpProxy;
+import com.browserup.bup.BrowserUpProxyServer;
+import com.browserup.harreader.model.Har;
+import com.browserup.harreader.model.HarEntry;
+import com.browserup.harreader.model.HarHeader;
+import com.browserup.harreader.model.HarRequest;
+import com.browserup.bup.proxy.CaptureType;
+import io.github.mike10004.seleniumcapture.BrowserUpHars;
 import org.apache.http.HttpHost;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpDelete;
@@ -28,6 +30,8 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
@@ -46,14 +50,14 @@ public class HarMaker {
     public static class EntrySpec {
         public final RequestSpec request;
         public final Duration preResponseDelay;
-        public final fi.iki.elonen.NanoHTTPD.Response response;
+        public final NanoHTTPD.Response response;
         public final Duration postResponseDelay;
 
-        public EntrySpec(RequestSpec request, fi.iki.elonen.NanoHTTPD.Response response) {
+        public EntrySpec(RequestSpec request, NanoHTTPD.Response response) {
             this(request, Duration.ofMillis(50), response, Duration.ofMillis(50));
         }
 
-        public EntrySpec(RequestSpec request, Duration preResponseDelay, fi.iki.elonen.NanoHTTPD.Response response, Duration postResponseDelay) {
+        public EntrySpec(RequestSpec request, Duration preResponseDelay, NanoHTTPD.Response response, Duration postResponseDelay) {
             this.request = request;
             this.preResponseDelay = preResponseDelay;
             this.response = response;
@@ -98,8 +102,10 @@ public class HarMaker {
     }
 
     public void produceHarFile(List<EntrySpec> specs, HttpCallback callback, File outputHarFile) throws IOException, URISyntaxException {
-        produceHar(specs, callback).writeTo(outputHarFile);
+        BrowserUpHars.writeHar(produceHar(specs, callback), outputHarFile, HAR_OUTPUT_CHARSET);
     }
+
+    private static final Charset HAR_OUTPUT_CHARSET = StandardCharsets.UTF_8;
 
     public interface HttpCallback {
         void requestSent(RequestSpec requestSpec);
@@ -112,9 +118,9 @@ public class HarMaker {
             specsWithIds.put(UUID.randomUUID(), spec);
         });
         int port = 59876;
-        fi.iki.elonen.NanoHTTPD nanoserver = new fi.iki.elonen.NanoHTTPD(port) {
+        NanoHTTPD nanoserver = new NanoHTTPD(port) {
             @Override
-            public Response serve(IHTTPSession session) {
+            public NanoHTTPD.Response serve(NanoHTTPD.IHTTPSession session) {
                 System.out.format("starting to serve in response to request %s %s%n", session.getMethod(), session.getUri());
                 String id = session.getHeaders().get(HEADER_ID);
                 checkArgument(id != null, "expect every request to have %s header", HEADER_ID);
@@ -129,7 +135,7 @@ public class HarMaker {
                 return false;
             }
         };
-        BrowserMobProxy proxy = new BrowserMobProxyServer();
+        BrowserUpProxy proxy = new BrowserUpProxyServer();
         proxy.enableHarCaptureTypes(EnumSet.allOf(CaptureType.class));
         proxy.newHar();
         proxy.start();
@@ -170,8 +176,8 @@ public class HarMaker {
 
     private static final String HEADER_ID = "X-Virtual-Har-Server-Id";
 
-    private HarNameValuePair removeHeaderByName(HarRequest request, String headerName) {
-        List<HarNameValuePair> headers = request.getHeaders();
+    private HarHeader removeHeaderByName(HarRequest request, String headerName) {
+        List<HarHeader> headers = request.getHeaders();
         int index = -1;
         for (int i = 0; i < headers.size(); i++) {
             if (headerName.equalsIgnoreCase(headers.get(i).getName())) {
@@ -181,7 +187,7 @@ public class HarMaker {
         if (index == -1) {
             throw new IllegalArgumentException("no header by name " + headerName);
         }
-        HarNameValuePair header = headers.get(index);
+        HarHeader header = headers.get(index);
         headers.remove(index);
         return header;
     }
@@ -193,7 +199,7 @@ public class HarMaker {
         List<HarEntry> entries = har.getLog().getEntries();
         for (HarEntry entry : entries) {
             HarRequest request = entry.getRequest();
-            HarNameValuePair idHeader = removeHeaderByName(request, HEADER_ID);
+            HarHeader idHeader = removeHeaderByName(request, HEADER_ID);
             String id = idHeader.getValue();
             checkState(id != null, "expect each request to have header %s", HEADER_ID);
             URI realUri = specs.get(UUID.fromString(id)).request.url;
